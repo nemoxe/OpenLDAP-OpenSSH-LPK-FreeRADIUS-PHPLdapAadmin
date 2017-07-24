@@ -1,0 +1,52 @@
+#En Ubuntu TRUSTY instalar
+
+	apt-get -y install libpam-ldap nscd ldap-utils
+	apt-get -y install python-pip python-ldap
+	# https://github.com/jirutka/ssh-ldap-pubkey
+	pip install ssh-ldap-pubkey
+
+
+#Editar /etc/ssh/sshd_config y agregar las siguientes lineas
+
+	AuthorizedKeysCommand /usr/local/bin/ssh-ldap-pubkey-wrapper
+	AuthorizedKeysCommandUser nobody
+
+#Restartear SSH
+
+	service ssh restart
+
+#Editar /etc/ldap.conf
+
+	base dc=truss,dc=com
+	uri ldap://10.127.0.10/
+	rootbinddn cn=admin,dc=truss,dc=com
+
+#Editar /etc/pam.d/common-auth, agregar la siguiente linea
+
+	account required    pam_access.so
+
+#Editar /etc/pam.d/common-password y borrar el argumento
+
+	use_authtok
+
+#Editar /etc/pam.d/common-session y agregar la siguiente linea
+
+	session required    pam_mkhomedir.so skel=/etc/skel umask=0022
+
+#Editar /etc/nsswitch.conf
+
+	passwd:         compat ldap
+	group:          compat ldap
+	shadow:         compat ldap
+	
+#Editar /etc/security/access.conf, agregar la siguiente linea y reemplazar GRUPO con un nombre de grupo real, creado en phpLDAPadmin
+
+	- : ALL EXCEPT root (admin) (wheel) (GRUPO): ALL EXCEPT LOCAL
+
+#Editar /etc/sudoers usando visudo, agregar la siguiente linea y reemplazar GRUPO con un nombre de grupo real, creado en phpLDAPadmin
+
+	%GRUPO ALL=(ALL) ALL
+
+#Restartear nscd
+
+	service nscd restart

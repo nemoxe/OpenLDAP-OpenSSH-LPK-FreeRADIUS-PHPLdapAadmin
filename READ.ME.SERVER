@@ -1,0 +1,134 @@
+#En una fresh install de ubuntu trusty:
+
+	apt-get update
+	apt-get install -y slapd ldap-utils
+	
+#		Setear password de la cuenta admin.
+
+	dpkg-reconfigure slapd
+	
+#		omit openldap configuration: NO
+#		DNS domain name: truss.com
+#		organization name: truss.com
+#		admin password: password
+#		database backend: HDB
+#		remove database when slapd purged: NO
+#		move old database: YES
+#		allow ldapv2: NO
+
+#Crear openssh-lpk.ldif con el siguiente contenido:
+
+	dn: cn=openssh-lpk,cn=schema,cn=config
+	objectClass: olcSchemaConfig
+	cn: openssh-lpk
+	olcAttributeTypes: ( 1.3.6.1.4.1.24552.500.1.1.1.13 NAME 'sshPublicKey'
+	  DESC 'MANDATORY: OpenSSH Public key'
+	  EQUALITY octetStringMatch
+	  SYNTAX 1.3.6.1.4.1.1466.115.121.1.40 )
+	olcObjectClasses: ( 1.3.6.1.4.1.24552.500.1.1.2.0 NAME 'ldapPublicKey' SUP top AUXILIARY
+	  DESC 'MANDATORY: OpenSSH LPK objectclass'
+	  MUST uid
+	  MAY sshPublicKey
+	  )
+
+
+#Importar schema OpenSSH-LPK usando:
+
+	ldapadd -Y EXTERNAL -H ldapi:/// -f openssh-lpk.ldif
+
+#Instalar phpLDAPadmin
+
+	apt-get install -y phpldapadmin
+
+#Buscar cada linea a continuacion y Editar /etc/phpldapadmin/config.php
+
+	#Configurar valores mas altos para uidNumber y gidNumber
+
+		$servers->setValue('auto_number','min',array('uidNumber'=>3000,'gidNumber'=>3000));
+
+	#No mostrar warnings de templates
+
+		$config->custom->appearance['hide_template_warning'] = true;
+
+	#Configurar el nombre a mostrar
+
+		$servers->setValue('server','name','Truss LDAP Server');
+
+	#Configurar direccion IP del servidor LDAP
+
+		$servers->setValue('server','host','10.127.0.10');
+
+	#Configurar Base DN
+
+		$servers->setValue('server','base',array('dc=truss,dc=com'));
+
+	#Configurar Cuenta ADMIN del servidor LDAP
+
+		$servers->setValue('login','bind_id','cn=admin,dc=truss,dc=com');
+
+
+#En /usr/share/phpldapadmin/templates/creation/posixAccount.xml
+
+	#Para configurar /bin/bash como login shell, buscar <value id="/bin/sh">/bin/sh</value> y debajo agregar nueva linea
+
+	        <value id="/bin/bash">/bin/bash</value>
+
+
+#En /usr/share/phpldapadmin/lib/TemplateRender.php
+
+	#Para arreglar bug al agregar passwords, buscar la linea $default = $this->getServer()->getValue('appearance','password_hash'); y cambiar a
+
+		$default = $this->getServer()->getValue('appearance','password_hash_custom');		
+
+
+#Instalar FreeRADIUS
+
+	apt-get install -y freeradius-ldap
+
+#Editar /etc/freeradius/clients.conf, al final del archivo agregar
+	
+	client 10.127.0.0/24 {
+        secret          = zarasa10
+        shortname       = red-10.127.0.0
+}
+
+	
+
+
+#Editar /etc/freeradius/modules/ldap
+
+	server = "10.127.0.10"
+        identity = "cn=admin,dc=truss,dc=com"
+        password = password
+        basedn = "dc=truss,dc=com"
+
+#Editar /etc/freeradius/sites-available/default
+
+
+	#Buscar la linea #  Read the 'users' file y comentar la linea que esta debajo
+
+		#files
+
+	#Buscar la linea #  The ldap module will set Auth-Type to LDAP if it has not y descomentar
+
+		ldap
+
+
+#Editar /etc/freeradius/sites-available/inner-tunnel
+
+	
+	#Buscar la linea #  Read the 'users' file y comentar la linea que esta debajo
+
+                #files
+
+	#Buscar la linea #  The ldap module will set Auth-Type to LDAP if it has not y descomentar
+
+                ldap
+
+	#Buscar la linea # Uncomment it if you want to use ldap for authentication y descomentar el bloque
+
+		Auth-Type LDAP {
+                ldap
+	        }
+
+
